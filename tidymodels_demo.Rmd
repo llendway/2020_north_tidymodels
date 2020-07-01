@@ -1,0 +1,33 @@
+---
+title: "Using tidymodels"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load `tidyverse` and `tidymodels` libraries and set the theme (optional).
+
+```{r libraries}
+library(tidyverse)         # for reading in data, graphing, and cleaning
+library(tidymodels)        # for modeling
+library(moderndive)        # for King County housing data
+theme_set(theme_minimal()) # my favorite ggplot2 theme :)
+```
+
+Read in the King County Housing data and take a look at the first 5 rows.
+
+```{r}
+data("house_prices")
+
+house_prices %>% 
+  slice(1:5)
+```
+
+
+According to the `house_prices` documentation, "This dataset contains house sale prices for King County, which includes Seattle. It includes homes sold between May 2014 and May 2015. This dataset was obtained from [Kaggle.com](https://www.kaggle.com/harlfoxem/housesalesprediction/data)." The description of the variables in the dataset in the documentation seem to be a little off. A more accurate description is provided in the image below.
+
+![](images/house_prices_variables.png){width=400px}
