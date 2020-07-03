@@ -2,11 +2,12 @@
 title: "Using tidymodels"
 output:
   html_document:
+    keep_md: yes
     df_print: paged
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
 
 Load `tidyverse` and `tidymodels` libraries and set the theme (optional).
@@ -20,7 +21,7 @@ theme_set(theme_minimal()) # my favorite ggplot2 theme :)
 
 Read in the King County Housing data and take a look at the first 5 rows.
 
-```{r}
+```{r data}
 data("house_prices")
 
 house_prices %>% 
@@ -31,3 +32,189 @@ house_prices %>%
 According to the `house_prices` documentation, "This dataset contains house sale prices for King County, which includes Seattle. It includes homes sold between May 2014 and May 2015. This dataset was obtained from [Kaggle.com](https://www.kaggle.com/harlfoxem/housesalesprediction/data)." The description of the variables in the dataset in the documentation seem to be a little off. A more accurate description is provided in the image below.
 
 ![](images/house_prices_variables.png){width=400px}
+
+# Exploration
+
+Take a quick look at distributions of all the variables to check for anything irregular.
+
+Quantitative variables:
+
+```{r expl_quant, fig.width=6, fig.height=4}
+house_prices %>% 
+  select_if(is.numeric) %>% 
+  pivot_longer(cols = everything(),names_to = "variable", values_to = "value") %>% 
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 30) +
+  facet_wrap(vars(variable), scales = "free")
+```
+
+Things I noticed and pre-processing thoughts:
+* Right-skewness in `price` and all variables regarding square footage --> log transform if using linear regression.
+* Many 0's in `sqft_basement`, `view`, and `yr_renovated` --> create indicator variables of having that feature vs. not, ie. a variable called `basement` where a 0 indicates no basement (`sqft_basement` = 0) and a ` indicates a basement (`sqft_basement` > 0).  
+* Age of home may be a better, more interpretable variable than year built --> `age_at_sale = year(date) - yr_built`.
+
+```{r expl_cat}
+house_prices %>% 
+  select_if(is.factor) %>% 
+  pivot_longer(cols = everything(),names_to = "variable", values_to = "value") %>% 
+  ggplot(aes(x = value)) +
+  geom_bar() +
+  facet_wrap(vars(variable), scales = "free", nrow = 2)
+```
+
+Things I noticed and pre-processing thoughts:
+* `condition` and `grade` both have levels with low counts --> make fewer categories.  
+* `zipcode` has many unique levels --> don't use that variable.
+
+The only other variables are `id` (not used in modeling), `date`, and `waterfront`. We might consider using the month the house was sold as a variable.
+
+
+# Data splitting
+
+First, we split the data into  training and testing datasets.  We use the training data to fit different types of models and to tune parameters of those models, if needed. The testing dataset is saved for the very end to compare a small subset of models. The `initial_split()` function from the `rsample` library (part of `tidymodels`) is used to create this split. We just do random splitting with this dataset, but there are other arguments that allow you to do stratified sampling. Then we use `training()` and `testing()` to extract the two datasets, `house_training` and `house_testing`. 
+
+```{r init_split}
+set.seed(327) #for reproducibility
+
+# Randomly assigns 75% of the data to training.
+house_split <- initial_split(house_prices, 
+                             prop = .75)
+house_split
+#<training/testing/total>
+
+house_training <- training(house_split)
+house_testing <- testing(house_split)
+```
+
+Later, we will use 5-fold cross-validation to evaluate the model and tune model parameters. We set up the five folds of the training data using the `vfold_cv()` function. We will explain this in more detail later.
+
+```{r cv}
+set.seed(1211) # for reproducibility
+house_cv <- vfold_cv(house_training, v = 5)
+```
+
+
+# Model preprocessing: `recipe()`s and `step_xxx()`s
+
+* We use the `recipe()` function to define the response/outcome variable and the predictor variables. 
+
+* A variety of `step_xxx()` functions can be used to do any data pre-processing/transforming. Find them all [here](https://www.tidymodels.org/find/recipes/). I used a few, with brief descriptions in the code. I also used some selector functions, like `all_predictors()` and `all_nominal()` to help me select the right variables.
+
+* We also use `update_roles()` to change the roles of some variables. For us, these are variables we may want to include for evaluation purposes but will not be used in building the model. I chose the role of `evaluative` but you could name that role anything you want, eg. `id`, `extra`, `junk` (maybe a bad idea?).
+
+```{r recipe}
+house_recipe <- recipe(price ~ ., #short-cut, . = all other vars
+                       data = house_training) %>% 
+  # Pre-processing:
+  # Remove, redundant to sqft_living and sqft_lot
+  step_rm(sqft_living15, sqft_lot15) %>%
+  # log sqft variables & price
+  step_log(starts_with("sqft"),-sqft_basement, price, 
+           base = 10) %>% 
+  # new grade variable combines low grades & high grades
+  # indicator variables for basement, renovate, and view 
+  # waterfront to numeric
+  step_mutate(grade = as.character(grade),
+              grade = fct_relevel(
+                        case_when(
+                          grade %in% "1":"6"   ~ "below_average",
+                          grade %in% "10":"13" ~ "high",
+                          TRUE ~ grade
+                        ),
+                        "below_average","7","8","9","high"),
+              basement = as.numeric(sqft_basement == 0),
+              renovated = as.numeric(yr_renovated == 0),
+              view = as.numeric(view == 0),
+              waterfront = as.numeric(waterfront))%>% 
+  # Remove sqft_basement and yr_renovated
+  step_rm(sqft_basement, yr_renovated) %>% 
+  # Create a month variable
+  step_date(date, features = "month") %>% 
+  # Make these evaluative variables, not included in modeling
+  update_role(all_of(c("id", "zipcode", 
+                       "lat", "long")),
+              new_role = "evaluative") %>% 
+  # Create indicator variables for factors/character/nominal
+  step_dummy(all_nominal(), all_predictors(), 
+             -has_role(match = "evaluative"))
+```
+
+Apply to training dataset, just to see what happens. Notice the names of the variables.
+
+```{r apply_recipe}
+house_recipe %>% 
+  prep(house_training) %>%
+  juice() 
+```
+
+# Defining the model and creating workflows
+
+Now that we have split and pre-processed the data, we are ready to model! First, we will model `price` (which is actually now *log(price)*) using simple linear regression.
+
+We will do this using some modeling functions from the `parsnip` package. Find all available functions [here](https://www.tidymodels.org/find/parsnip/). [Here](https://parsnip.tidymodels.org/reference/linear_reg.html) is the detail for linear regression.
+
+In order to define our model, we need to do these steps:
+
+* Define the model type, which is the general type of model you want to fit.    
+* Set the engine, which defines the package/function that will be used to fit the model.  
+* Set the mode, which is either "regression" for continuous response variables or "classification" for binary/categorical response variables. (Note that for linear regression, it can only be "regression", so we don't NEED this step in this case.)  
+* (OPTIONAL) Set arguments to tune. We'll see an example of this later.
+
+```{r linear_mod}
+house_linear_mod <- 
+  # Define a linear regression model
+  linear_reg() %>% 
+  # Set the engine to "lm" (lm() function is used to fit model)
+  set_engine("lm") %>% 
+  # Not necessary here, but good to remember for other models
+  set_mode("regression")
+```
+
+This is just setting up the process. We haven't fit the model to data yet, and there's still one more step before we do - creating a workflow! This combines the preprocessing and model definition steps.
+
+```{r workflow}
+house_lm_wf <- 
+  # Set up the workflow
+  workflow() %>% 
+  # Add the recipe
+  add_recipe(house_recipe) %>% 
+  # Add the modeling
+  add_model(house_linear_mod)
+
+house_lm_wf
+```
+
+# Modeling!
+
+Now we are finally ready to fit the model! After all that work, this part seems easy. Notice that we are fitting the model using the 5-fold dataset we created at the beginning. This allows us to evaluate the model using cross-validation statistics. For a deeper discussion of cross-validation, I recommend Bradley Boehmke's *Resampling* section of [Hands on Machine Learning with R](https://bradleyboehmke.github.io/HOML/process.html#resampling).
+
+```{r}
+house_lm_fit <- 
+  # Tell it the workflow
+  house_lm_wf %>% 
+  # Fit the model
+  fit(house_training)
+
+house_lm_fit %>% 
+  pull_workflow_fit() %>% 
+  tidy()
+```
+
+
+```{r fit_model_cv}
+set.seed(456) # For reproducibility
+
+house_lm_fit_cv <-
+  # Tell it the workflow
+  house_lm_wf %>% 
+  # Fit the model (using the above workflow) to the cv data
+  fit_resamples(house_cv)
+
+house_lm_fit_cv %>% 
+  select(id, .metrics) %>% 
+  unnest()
+
+collect_metrics(house_lm_fit_cv)
+```
+
+
