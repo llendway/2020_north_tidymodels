@@ -14,6 +14,7 @@ Load `tidyverse` and `tidymodels` libraries and set the theme (optional).
 
 ```{r libraries}
 library(tidyverse)         # for reading in data, graphing, and cleaning
+library(lubridate)         # for date manipulation
 library(tidymodels)        # for modeling
 library(moderndive)        # for King County housing data
 theme_set(theme_minimal()) # my favorite ggplot2 theme :)
@@ -114,6 +115,7 @@ house_recipe <- recipe(price ~ ., #short-cut, . = all other vars
   # new grade variable combines low grades & high grades
   # indicator variables for basement, renovate, and view 
   # waterfront to numeric
+  # age of house
   step_mutate(grade = as.character(grade),
               grade = fct_relevel(
                         case_when(
@@ -125,13 +127,14 @@ house_recipe <- recipe(price ~ ., #short-cut, . = all other vars
               basement = as.numeric(sqft_basement == 0),
               renovated = as.numeric(yr_renovated == 0),
               view = as.numeric(view == 0),
-              waterfront = as.numeric(waterfront))%>% 
-  # Remove sqft_basement and yr_renovated
-  step_rm(sqft_basement, yr_renovated) %>% 
+              waterfront = as.numeric(waterfront),
+              age_at_sale = year(date) - yr_built)%>% 
+  # Remove sqft_basement, yr_renovated, and yr_built
+  step_rm(sqft_basement, yr_renovated, yr_built) %>% 
   # Create a month variable
   step_date(date, features = "month") %>% 
   # Make these evaluative variables, not included in modeling
-  update_role(all_of(c("id", "zipcode", 
+  update_role(all_of(c("id","date","zipcode", 
                        "lat", "long")),
               new_role = "evaluative") %>% 
   # Create indicator variables for factors/character/nominal
@@ -184,22 +187,25 @@ house_lm_wf <-
 house_lm_wf
 ```
 
-# Modeling!
+# Modeling and evaluating
 
-Now we are finally ready to fit the model! After all that work, this part seems easy. Notice that we are fitting the model using the 5-fold dataset we created at the beginning. This allows us to evaluate the model using cross-validation statistics. For a deeper discussion of cross-validation, I recommend Bradley Boehmke's *Resampling* section of [Hands on Machine Learning with R](https://bradleyboehmke.github.io/HOML/process.html#resampling).
+Now we are finally ready to fit the model! After all that work, this part seems easy. We first use the `fit()` function to fit the model, telling it which data set we want to fit the model to. Then we use some other functions to display the results nicely.
 
-```{r}
+```{r fit_lm}
 house_lm_fit <- 
   # Tell it the workflow
   house_lm_wf %>% 
-  # Fit the model
+  # Fit the model to the training data
   fit(house_training)
 
+# Display the results nicely
 house_lm_fit %>% 
   pull_workflow_fit() %>% 
-  tidy()
+  tidy() %>% 
+  mutate_if(is.numeric, ~round(.x,3))
 ```
 
+To evaluate the model, we will use cross-validation (CV), specifically 5-fold CV. (I am guessing we don't have to do both the previous step of fitting a model on the training data AND this step, but I couldn't figure out how to extract the final model from the CV data ... so this was my solution for now.) So, we fit the model using the 5-fold dataset we created at the beginning. For a deeper discussion of cross-validation, I recommend Bradley Boehmke's *Resampling* section of [Hands on Machine Learning with R](https://bradleyboehmke.github.io/HOML/process.html#resampling).
 
 ```{r fit_model_cv}
 set.seed(456) # For reproducibility
@@ -207,14 +213,70 @@ set.seed(456) # For reproducibility
 house_lm_fit_cv <-
   # Tell it the workflow
   house_lm_wf %>% 
-  # Fit the model (using the above workflow) to the cv data
+  # Fit the model (using the workflow) to the cv data
   fit_resamples(house_cv)
 
+# The evaluation metrics for each fold:
 house_lm_fit_cv %>% 
   select(id, .metrics) %>% 
   unnest()
 
+# Evaluation metrics averaged over all folds:
 collect_metrics(house_lm_fit_cv)
+
+# Just to show you where the averages come from:
+house_lm_fit_cv %>% 
+  select(id, .metrics) %>% 
+  unnest() %>% 
+  group_by(.metric, .estimator) %>% 
+  summarize(mean = mean(.estimate),
+            n = n(),
+            std_err = sd(.estimate)/sqrt(n))
 ```
 
+# Predicting and evaluating testing data
+
+In this simple scenario, we may be interested in seeing how the model performs on the testing data that was left out. The code below will fit the model to the training data and apply it to the testing data. There are other ways we could have done this, but the way we do it here will be useful when we start using more complex models where we need to tune model parameters.
+
+After the model is fit and applied, we collect the performance metrics and display them and show the predictions from the testing data.
+
+```{r fit_test}
+house_lm_test <- 
+  # The modeling work flow
+  house_lm_wf %>% 
+  # Use training data to fit the model and apply it to testing data
+  last_fit(house_split)
+
+# performance metrics from testing data
+collect_metrics(house_lm_test)
+
+# predictions from testing data
+collect_predictions(house_lm_test)
+```
+
+The code below creates a simple plot to examine predicted vs. actual price from the house data. 
+
+```{r act_pred_plot}
+collect_predictions(house_lm_test) %>% 
+  ggplot(aes(x = price, y = .pred)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  geom_abline(slope = 1, intercept = 0, color = "darkred") +
+  labs(x = "Actual log(price)", y = "Predicted log(price)")
+```
+
+```{r}
+collect_predictions(house_lm_test) %>% 
+  ggplot(aes(x = 10^price, y = 10^.pred)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  geom_abline(slope = 1, intercept = 0, color = "darkred") +
+  labs(x = "Actual price", y = "Predicted price")
+```
+
+# How will the model be used?
+
+When we use create models, it is important to think about how the model will be used and specifially how the model could do harm. 
+
+# More complex model with tuning parameters
 
