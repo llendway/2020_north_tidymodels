@@ -17,6 +17,7 @@ library(tidyverse)         # for reading in data, graphing, and cleaning
 library(lubridate)         # for date manipulation
 library(tidymodels)        # for modeling
 library(moderndive)        # for King County housing data
+library(vip)               # for variable importance plots
 theme_set(theme_minimal()) # my favorite ggplot2 theme :)
 ```
 
@@ -219,7 +220,7 @@ house_lm_fit_cv <-
 # The evaluation metrics for each fold:
 house_lm_fit_cv %>% 
   select(id, .metrics) %>% 
-  unnest()
+  unnest(.metrics)
 
 # Evaluation metrics averaged over all folds:
 collect_metrics(house_lm_fit_cv)
@@ -227,7 +228,7 @@ collect_metrics(house_lm_fit_cv)
 # Just to show you where the averages come from:
 house_lm_fit_cv %>% 
   select(id, .metrics) %>% 
-  unnest() %>% 
+  unnest(.metrics) %>% 
   group_by(.metric, .estimator) %>% 
   summarize(mean = mean(.estimate),
             n = n(),
@@ -321,7 +322,7 @@ penalty_grid <- grid_regular(penalty(),
 penalty_grid
 ```
 
-Finally, we can tune the model using the `tune_grid()` function. 
+Use the `tune_grid()` function to fit the model using cross-validation for all `penalty_grid` values and evaluate on all the folds.
 
 ```{r tune}
 house_lasso_tune <- 
@@ -334,11 +335,75 @@ house_lasso_tune <-
 house_lasso_tune
 ```
 
+Then look at the cross-validated results.
 
-And
+```{r tune_results}
+# The rmse for each fold:
+house_lasso_tune %>% 
+  select(id, .metrics) %>% 
+  unnest() %>% 
+  filter(.metric == "rmse")
 
+# rmse averaged over all folds:
+house_lasso_tune %>% 
+  collect_metrics() %>% 
+  filter(.metric == "rmse")
 
+# Visualize rmse vs. penalty
+house_lasso_tune %>% 
+  collect_metrics() %>% 
+  filter(.metric == "rmse") %>% 
+  ggplot(aes(x = penalty, y = mean)) +
+  geom_point() +
+  geom_line() +
+  scale_x_log10() +
+  labs(x = "penalty", y = "rmse")
+```
 
+Adjust the workflow to include the best tuning parameter (smallest rmse, in this case) in the model. There are other ways you can select models, like `select_by_one_std_error()` which "selects the most simple model that is within one standard error of the numerically optimal results".
 
+```{r tune_wf}
+# Best tuning parameter
+best_param <- house_lasso_tune %>% 
+  select_best(metric = "rmse")
+best_param
 
+# Finalize workflow
+house_lasso_final_wf <- house_lasso_wf %>% 
+  finalize_workflow(best_param)
+house_lasso_final_wf
+```
+
+Now we could fit this to the training data, look at the model
+
+```{r lasso_train}
+house_lasso_final_mod <- house_lasso_final_wf %>% 
+  fit(data = house_training)
+house_lasso_final_mod
+
+# This output is not what I expected. Still investigating.
+house_lasso_final_mod %>% 
+  pull_workflow_fit() %>% 
+  tidy()
+
+# Visualize variable importance
+house_lasso_final_mod %>% 
+  pull_workflow_fit() %>% 
+  vip()
+```
+
+Lastly, we apply the model to the test data and examine some final metrics. We also show the metrics from the regular linear model. It looks like performance for the LASSO model is ever so slightly better, but just barely.
+
+```{r lasso_test}
+# Fit model with best tuning parameter(s) to training data and apply to test data
+house_lasso_test <- house_lasso_final_wf %>% 
+  last_fit(house_split)
+
+# Metrics for model applied to test data
+house_lasso_test %>% 
+  collect_metrics()
+
+# Compare to regular linear regression results
+collect_metrics(house_lm_test)
+```
 
