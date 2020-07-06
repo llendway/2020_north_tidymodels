@@ -276,7 +276,69 @@ collect_predictions(house_lm_test) %>%
 
 # How will the model be used?
 
-When we use create models, it is important to think about how the model will be used and specifially how the model could do harm. 
+When we use create models, it is important to think about how the model will be used and specifically how the model could do harm. One thing to notice in the graphs above is that the price of lower priced homes are, on average, overestimated whereas the price of higher priced homes are, on average, underestimated. 
+
+What if this model was used to determine the price of homes for property tax purposes? Then lower priced homes would be overtaxed while higher priced homes would be undertaxed. 
 
 # More complex model with tuning parameters
+
+Now we are going to try using [Least Absolute Shrinkage and Selection Operator (LASSO)](https://en.wikipedia.org/wiki/Lasso_(statistics)) regression. This method shrinks some coefficients to 0 based on a penalty term. We will use cross-validation to help us find the best penalty term. 
+
+We will set up the model similar to how we set up the linear model, but add a `set_args()` function. We are telling it that we are going to tune the penalty parameter later.
+
+```{r lasso_mod}
+house_lasso_mod <- 
+  # Define a lasso model 
+  # I believe default is mixture = 1 so probably don't need 
+  linear_reg(mixture = 1) %>% 
+  # Set the engine to "glmnet" 
+  set_engine("glmnet") %>% 
+  # The parameters we will tune.
+  set_args(penalty = tune()) %>% 
+  # Use "regression"
+  set_mode("regression")
+```
+
+And then we create a LASSO workflow.
+
+```{r lasso_workflow}
+house_lasso_wf <- 
+  # Set up the workflow
+  workflow() %>% 
+  # Add the recipe
+  add_recipe(house_recipe) %>% 
+  # Add the modeling
+  add_model(house_lasso_mod)
+
+house_lasso_wf
+```
+
+We use the `grid_regular()` function from the `dials` library to choose some values of the `penalty` parameter for us. Alternatively, we could give it a vector of values we want to try.
+
+```{r tune_grid}
+penalty_grid <- grid_regular(penalty(),
+                             levels = 20)
+penalty_grid
+```
+
+Finally, we can tune the model using the `tune_grid()` function. 
+
+```{r tune}
+house_lasso_tune <- 
+  house_lasso_wf %>% 
+  tune_grid(
+    resamples = house_cv,
+    grid = penalty_grid
+    )
+
+house_lasso_tune
+```
+
+
+And
+
+
+
+
+
 
