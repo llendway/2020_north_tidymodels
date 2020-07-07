@@ -347,7 +347,7 @@ Then look at the cross-validated results.
 # The rmse for each fold:
 house_lasso_tune %>% 
   select(id, .metrics) %>% 
-  unnest() %>% 
+  unnest(.metrics) %>% 
   filter(.metric == "rmse")
 
 # rmse averaged over all folds:
@@ -373,7 +373,7 @@ best_param
 
 ## Update worflow for best tuned parameter
 
-Adjust the workflow to include the best tuning parameter (smallest rmse, in this case) in the model. There are other ways you can select models, like `select_by_one_std_error()` which "selects the most simple model that is within one standard error of the numerically optimal results".
+Adjust the workflow to include the best tuning parameter (smallest rmse, using `select_best()` in previous step) in the model. There are other ways you can select models, like `select_by_one_std_error()` which "selects the most simple model that is within one standard error of the numerically optimal results".
 
 ```{r tune_wf}
 # Finalize workflow
@@ -384,7 +384,7 @@ house_lasso_final_wf
 
 ## Fit best tune to training data
 
-Now we could fit this to the training data and look at the resulting model.
+Now we could fit this to the training data and look at the resulting model. The model output wasn't what I was expecting. According to Julia Silge's response to my question [here](https://juliasilge.com/blog/lasso-the-office/), this should be fixed if you install parsnip from GitHub] using `devtools::install_github("tidymodels/parsnip")` from the `devtools` library.
 
 ```{r lasso_train}
 house_lasso_final_mod <- house_lasso_final_wf %>% 
@@ -395,7 +395,11 @@ house_lasso_final_mod
 house_lasso_final_mod %>% 
   pull_workflow_fit() %>% 
   tidy()
+```
 
+We can visualize variable importance.
+
+```{r vip}
 # Visualize variable importance
 house_lasso_final_mod %>% 
   pull_workflow_fit() %>% 
@@ -418,4 +422,19 @@ house_lasso_test %>%
 # Compare to regular linear regression results
 collect_metrics(house_lm_test)
 ```
+
+# Resources
+
+Thanks to many other folks for sharing materials about `tidymodels`, including
+
+![](images/photos.png){width=500}
+
+These are some resources I used to help me create this activity:
+
+* [Rebecca Barter's blog](http://www.rebeccabarter.com/blog/2020-03-25_machine_learning/)
+
+* [tidymodels website](https://www.tidymodels.org/start/) (Alison Hill, Max Kuhn, Desirée De Leon, Julia Silge)
+
+* [Julia Silge's tidymodels example](https://juliasilge.com/blog/lasso-the-office/)
+
 
