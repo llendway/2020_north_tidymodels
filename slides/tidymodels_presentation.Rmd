@@ -1,0 +1,380 @@
+---
+title: "Reproducible Machine Learning with `tidymodels`"
+author: "Lisa Lendway"
+output:
+  ioslides_presentation:
+    widescreen: true
+    smaller: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Who is this for?
+
+<div class="columns-2">
+
+![](../images/garden_entrance.JPG){width=400}
+
+Most helpful if you:
+
+* Use a variety of modeling methods: linear models, generalized linear models, LASSO, trees, random forest, etc.  
+* Are familiar with cross-validation.  
+* Use the `carat` package.
+* Are comfortable with the `tidyverse`.
+
+Also useful if you:
+
+* Have used some modeling techniques, like `lm()`.  
+* Are excited about learning machine learning.  
+* Love gardening!
+
+</div>
+
+<div class="notes">
+Welcome. My name is Lisa Lendway. I have a PhD in Statistics and teach Statistics and Data Science to undergraduates at Macalester College in St. Paul, MN. 
+
+I am excited to give this talk today. I initially signed up to do it to force myself to learn `tidymodels`. 
+</div>
+
+## What will we cover?
+
+<div class="centered">
+
+![Bird's eye view of my garden, Image Credit: Google Maps](../images/garden_birdseye.png){width=400}
+</div>
+
+<div class="notes">
+I will give a high-level overview of how and when you might use some of the `tidymodels` functions. We will call it a birds' eye view. 
+</div>
+
+## What will we cover?
+
+![](../images/tidymodels_process.png){width=600}
+
+Follow along in the rmd file.
+
+<div class="notes">
+We will walk through all of these steps, using different `tidymodels` functions along the way.
+</div>
+
+## Libraries 
+
+The libraries we will use:
+```{r libraries}
+library(tidyverse)         # for reading in data, graphing, and cleaning
+library(lubridate)         # for date manipulation
+library(tidymodels)        # for modeling
+library(moderndive)        # for King County housing data
+library(vip)               # for variable importance plots
+theme_set(theme_minimal()) # my favorite ggplot2 theme :)
+```
+
+Similar to `tidyverse`, `tidymodels` is a collection of packages:
+```{r}
+tidymodels_packages()
+```
+
+
+<div class="notes">
+</div>
+
+## The data
+
+According to the `house_prices` documentation, "This dataset contains house sale prices for King County, which includes Seattle. It includes homes sold between May 2014 and May 2015.
+
+```{r data}
+data("house_prices")
+
+house_prices %>% 
+  slice(1:10)
+```
+
+We will model the home price using the other variables in the model.
+
+<div class="notes">
+</div>
+
+## Exploration
+
+```{r expl_quant, fig.width=8, fig.height=5, echo=FALSE}
+house_prices %>% 
+  select_if(is.numeric) %>% 
+  pivot_longer(cols = everything(),names_to = "variable", values_to = "value") %>% 
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 30) +
+  facet_wrap(vars(variable), scales = "free")
+```
+
+<div class="notes">
+Things I noticed and pre-processing thoughts:
+* Right-skewness in `price` and all variables regarding square footage --> log transform if using linear regression.
+* Many 0's in `sqft_basement`, `view`, and `yr_renovated` --> create indicator variables of having that feature vs. not, ie. a variable called `basement` where a 0 indicates no basement (`sqft_basement` = 0) and a ` indicates a basement (`sqft_basement` > 0).  
+* Age of home may be a better, more interpretable variable than year built --> `age_at_sale = year(date) - yr_built`.
+</div>
+
+## Exploration
+
+```{r expl_cat, echo=FALSE}
+house_prices %>% 
+  select_if(is.factor) %>% 
+  pivot_longer(cols = everything(),names_to = "variable", values_to = "value") %>% 
+  ggplot(aes(x = value)) +
+  geom_bar() +
+  facet_wrap(vars(variable), scales = "free", nrow = 2)
+```
+
+<div class="notes">
+Things I noticed and pre-processing thoughts:
+* `condition` and `grade` both have levels with low counts --> make fewer categories.  
+* `zipcode` has many unique levels --> don't use that variable.
+
+The only other variables are `id` (not used in modeling), `date`, and `waterfront`. We might consider using the month the house was sold as a variable.
+</div>
+
+## Overview of modeling process
+
+![Image Credit: https://bradleyboehmke.github.io/HOML/process.html](../images/modeling_process_HOML.png){width=900}
+
+<div class="notes">
+</div>
+
+## Data Splitting
+
+```{r init_split}
+set.seed(327) #for reproducibility
+
+# Randomly assigns 75% of the data to training.
+house_split <- initial_split(house_prices, 
+                             prop = .75)
+house_split
+#<training/testing/total>
+
+house_training <- training(house_split)
+house_testing <- testing(house_split)
+```
+
+<div class="notes">
+First, we split the data into  training and testing datasets.  We use the training data to fit different types of models and to tune parameters of those models, if needed. The testing dataset is saved for the very end to compare a small subset of models. The `initial_split()` function from the `rsample` library (part of `tidymodels`) is used to create this split. We just do random splitting with this dataset, but there are other arguments that allow you to do stratified sampling. Then we use `training()` and `testing()` to extract the two datasets, `house_training` and `house_testing`. 
+</div>
+
+## Data Splitting
+
+Later, we will use 5-fold cross-validation to evaluate the model and tune model parameters. 
+
+```{r cv}
+set.seed(1211) # for reproducibility
+house_cv <- vfold_cv(house_training, v = 5)
+```
+
+<div class="notes">
+We set up the five folds of the training data using the `vfold_cv()` function. We will explain this in more detail later.
+</div>
+
+## Data preprocessing and recipe
+
+```{r recipe, echo=FALSE}
+house_recipe <- recipe(price ~ ., #short-cut, . = all other vars
+                       data = house_training) %>% 
+  # Pre-processing:
+  # Remove, redundant to sqft_living and sqft_lot
+  step_rm(sqft_living15, sqft_lot15) %>%
+  # log sqft variables & price
+  step_log(starts_with("sqft"),-sqft_basement, price, 
+           base = 10) %>% 
+  # new grade variable combines low grades & high grades
+  # indicator variables for basement, renovate, and view 
+  # waterfront to numeric
+  # age of house
+  step_mutate(grade = as.character(grade),
+              grade = fct_relevel(
+                        case_when(
+                          grade %in% "1":"6"   ~ "below_average",
+                          grade %in% "10":"13" ~ "high",
+                          TRUE ~ grade
+                        ),
+                        "below_average","7","8","9","high"),
+              basement = as.numeric(sqft_basement == 0),
+              renovated = as.numeric(yr_renovated == 0),
+              view = as.numeric(view == 0),
+              waterfront = as.numeric(waterfront),
+              age_at_sale = year(date) - yr_built)%>% 
+  # Remove sqft_basement, yr_renovated, and yr_built
+  step_rm(sqft_basement, yr_renovated, yr_built) %>% 
+  # Create a month variable
+  step_date(date, features = "month") %>% 
+  # Make these evaluative variables, not included in modeling
+  update_role(all_of(c("id","date","zipcode", 
+                       "lat", "long")),
+              new_role = "evaluative") %>% 
+  # Create indicator variables for factors/character/nominal
+  step_dummy(all_nominal(), all_predictors(), 
+             -has_role(match = "evaluative"))
+```
+
+A variety of `step_xxx()` functions can be used to do data pre-processing/transforming. Find them all [here](https://www.tidymodels.org/find/recipes/).
+![](../images/recipe_steps.png){width=600}
+
+<div class="notes">
+* We use the `recipe()` function to define the response/outcome variable and the predictor variables. 
+
+* I used a few, with brief descriptions in the code. I also used some selector functions, like `all_predictors()` and `all_nominal()` to help me select the right variables.
+
+* We also use `update_roles()` to change the roles of some variables. For us, these are variables we may want to include for evaluation purposes but will not be used in building the model. I chose the role of `evaluative` but you could name that role anything you want, eg. `id`, `extra`, `junk` (maybe a bad idea?).
+
+</div>
+
+## Apply
+
+Apply to training dataset, just to see what happens. Notice the names of the variables.
+
+```{r apply_recipe}
+house_recipe %>% 
+  prep(house_training) %>%
+  juice() 
+```
+
+<div class="notes">
+</div>
+
+## Defining the model
+
+In order to define our model, we need to do these steps:
+
+* Define the model type, which is the general type of model you want to fit.    
+* Set the engine, which defines the package/function that will be used to fit the model.  
+* Set the mode, which is either "regression" for continuous response variables or "classification" for binary/categorical response variables. (Note that for linear regression, it can only be "regression", so we don't NEED this step in this case.)  
+* (OPTIONAL) Set arguments to tune. We'll see an example of this later.
+
+Find all available functions from parsnip [here](https://www.tidymodels.org/find/parsnip/). [Here](https://parsnip.tidymodels.org/reference/linear_reg.html) is the detail for linear regression.
+
+```{r linear_mod}
+house_linear_mod <- 
+  # Define a linear regression model
+  linear_reg() %>% 
+  # Set the engine to "lm" (lm() function is used to fit model)
+  set_engine("lm") %>% 
+  # Not necessary here, but good to remember for other models
+  set_mode("regression")
+```
+
+<div class="notes">
+Now that we have split and pre-processed the data, we are ready to model! First, we will model `price` (which is actually now *log(price)*) using simple linear regression.
+
+This is just setting up the process. We haven't fit the model to data yet, and there's still one more step before we do - creating a workflow!
+</div>
+
+## Creating a workflow
+
+This combines the preprocessing and model definition steps.
+
+```{r workflow}
+house_lm_wf <- 
+  # Set up the workflow
+  workflow() %>% 
+  # Add the recipe
+  add_recipe(house_recipe) %>% 
+  # Add the modeling
+  add_model(house_linear_mod)
+
+house_lm_wf
+```
+
+<div class="notes">
+</div>
+
+## Modeling
+
+We first use the `fit()` function to fit the model, telling it which data set we want to fit the model to. Then we use some other functions to display the results nicely.
+
+```{r fit_lm}
+house_lm_fit <- 
+  # Tell it the workflow
+  house_lm_wf %>% 
+  # Fit the model to the training data
+  fit(house_training)
+
+# Display the results nicely
+house_lm_fit %>% 
+  pull_workflow_fit() %>% 
+  tidy() %>% 
+  mutate_if(is.numeric, ~round(.x,3))
+```
+<div class="notes">
+Now we are finally ready to fit the model! After all that work, this part seems easy. We first use the `fit()` function to fit the model, telling it which data set we want to fit the model to. Then we use some other functions to display the results nicely.
+</div>
+
+## Model evaluation
+
+To evaluate the model, we will use cross-validation (CV), specifically 5-fold CV. First, let's take a moment to review (or learn!) what 5-fold CV means.
+
+![Image credit: https://bradleyboehmke.github.io/HOML/process.html#resampling](../images/cv_HOML.png){width=800}
+
+<div class="notes">
+In $k$-fold cross-validation, we start by dividing the data randomly into $k$ approximately equal groups or *folds*. The schematic here shows 5-fold cross-validation. 
+
+The model is fit on $k-1$ of the folds and the remaining fold is used to evaluate the model. Let's look at the first row in the schematic. Here the model would be fit on the data that are in folds 2, 3, 4, and 5. The model would be evaluated on the data in fold 1. 
+
+RMSE is a common performance metric for models with a quantitative response. It is computed by taking the difference between the predicted and actual response for each observation, squaring it, and taking the square root of the average over all predicted observations. 
+
+So, again looking at the first row in the schematic, the model is fit to folds 2, 3, 4, and 5 and we would use that model to compute the RMSE for fold 1. In the second row, the model is fit to the data in folds 1, 3, 4, and 5 and that model is used to compute the RMSE for the data in the 2nd fold. 
+
+After this is done for all 5 folds, we take the average RMSE, to obtain the overall performance. This overall error is sometimes called the CV error. Averaging the performance over $k$ folds gives a better estimate of the true error than just using one hold-out set. It also allows us to estimate its variability.
+</div>
+
+## Evaluate model (code)
+
+```{r fit_model_cv}
+house_lm_fit_cv <-
+  # Tell it the workflow
+  house_lm_wf %>% 
+  # Fit the model (using the workflow) to the cv data
+  fit_resamples(house_cv)
+
+# rmse for each fold:
+house_lm_fit_cv %>% 
+  select(id, .metrics) %>% 
+  unnest(.metrics) %>% 
+  filter(.metric == "rmse")
+
+# Evaluation metrics averaged over all folds:
+collect_metrics(house_lm_fit_cv)
+```
+<div class="notes">
+The `collect_metrics()` function averages the metrics over all the evaluation folds. 
+</div>
+
+## 
+
+<div class="notes">
+</div>
+
+## 
+
+<div class="notes">
+</div>
+
+## 
+
+<div class="notes">
+</div>
+
+## 
+
+<div class="notes">
+</div>
+
+## 
+
+<div class="notes">
+</div>
+
+## 
+
+<div class="notes">
+</div>
+
+
+
