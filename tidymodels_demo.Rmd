@@ -10,12 +10,12 @@ output:
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
 
-Load `tidyverse` and `tidymodels` libraries and set the theme (optional).
+Load `tidyverse`, `tidymodels`, and a few other libraries and set the theme (optional).
 
 ```{r libraries}
 library(tidyverse)         # for reading in data, graphing, and cleaning
-library(lubridate)         # for date manipulation
 library(tidymodels)        # for modeling
+library(lubridate)         # for date manipulation
 library(moderndive)        # for King County housing data
 library(vip)               # for variable importance plots
 theme_set(theme_minimal()) # my favorite ggplot2 theme :)
@@ -31,7 +31,7 @@ house_prices %>%
 ```
 
 
-According to the `house_prices` documentation, "This dataset contains house sale prices for King County, which includes Seattle. It includes homes sold between May 2014 and May 2015. This dataset was obtained from [Kaggle.com](https://www.kaggle.com/harlfoxem/housesalesprediction/data)." The description of the variables in the dataset in the documentation seem to be a little off. A more accurate description is provided in the image below.
+According to the `house_prices` documentation, "This dataset contains house sale prices for King County, which includes Seattle. It includes homes sold between May 2014 and May 2015. This dataset was obtained from [Kaggle.com](https://www.kaggle.com/harlfoxem/housesalesprediction/data)." The description of the variables in the dataset in the documentation seem to be a little off. A more accurate description is provided in the image below. We will model the price of homes. 
 
 ![](images/house_prices_variables.png){width=400px}
 
@@ -96,7 +96,7 @@ house_cv <- vfold_cv(house_training, v = 5)
 ```
 
 
-# Model preprocessing: `recipe()`s and `step_xxx()`s
+# Data preprocessing: `recipe()`s and `step_xxx()`s
 
 * We use the `recipe()` function to define the response/outcome variable and the predictor variables. 
 
@@ -209,7 +209,7 @@ house_lm_fit %>%
 To evaluate the model, we will use cross-validation (CV), specifically 5-fold CV. (I am guessing we don't have to do both the previous step of fitting a model on the training data AND this step, but I couldn't figure out how to extract the final model from the CV data ... so this was my solution for now.) So, we fit the model using the 5-fold dataset we created at the beginning. For a deeper discussion of cross-validation, I recommend Bradley Boehmke's *Resampling* section of [Hands on Machine Learning with R](https://bradleyboehmke.github.io/HOML/process.html#resampling).
 
 ```{r fit_model_cv}
-set.seed(456) # For reproducibility
+set.seed(456) # For reproducibility - not needed for this algorithm
 
 house_lm_fit_cv <-
   # Tell it the workflow
