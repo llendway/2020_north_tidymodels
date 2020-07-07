@@ -29,7 +29,6 @@ Also useful if you:
 
 * Have used some modeling techniques, like `lm()`.  
 * Are excited about learning machine learning.  
-* Love gardening!
 
 </div>
 
@@ -52,9 +51,12 @@ I will give a high-level overview of how and when you might use some of the `tid
 
 ## What will we cover?
 
-![](../images/tidymodels_process.png){width=600}
+<div class="centered">
 
-Follow along in the rmd file.
+![](../images/tidymodels_process.png){width=600}
+</div>
+
+Follow along in the rmd file: INCLUDE LINK!!!
 
 <div class="notes">
 We will walk through all of these steps, using different `tidymodels` functions along the way.
@@ -136,12 +138,15 @@ The only other variables are `id` (not used in modeling), `date`, and `waterfron
 
 ## Overview of modeling process
 
+<div class="centered">
+
 ![Image Credit: https://bradleyboehmke.github.io/HOML/process.html](../images/modeling_process_HOML.png){width=900}
+</div>
 
 <div class="notes">
 </div>
 
-## Data Splitting
+## Data splitting
 
 ```{r init_split}
 set.seed(327) #for reproducibility
@@ -160,13 +165,14 @@ house_testing <- testing(house_split)
 First, we split the data into  training and testing datasets.  We use the training data to fit different types of models and to tune parameters of those models, if needed. The testing dataset is saved for the very end to compare a small subset of models. The `initial_split()` function from the `rsample` library (part of `tidymodels`) is used to create this split. We just do random splitting with this dataset, but there are other arguments that allow you to do stratified sampling. Then we use `training()` and `testing()` to extract the two datasets, `house_training` and `house_testing`. 
 </div>
 
-## Data Splitting
+## Data splitting
 
 Later, we will use 5-fold cross-validation to evaluate the model and tune model parameters. 
 
 ```{r cv}
 set.seed(1211) # for reproducibility
 house_cv <- vfold_cv(house_training, v = 5)
+house_cv 
 ```
 
 <div class="notes">
@@ -215,6 +221,7 @@ house_recipe <- recipe(price ~ ., #short-cut, . = all other vars
 ```
 
 A variety of `step_xxx()` functions can be used to do data pre-processing/transforming. Find them all [here](https://www.tidymodels.org/find/recipes/).
+
 ![](../images/recipe_steps.png){width=600}
 
 <div class="notes">
@@ -226,9 +233,9 @@ A variety of `step_xxx()` functions can be used to do data pre-processing/transf
 
 </div>
 
-## Apply
+## Apply `recipe` and `step`s
 
-Apply to training dataset, just to see what happens. Notice the names of the variables.
+Apply recipe and steps to training dataset, just to see what happens. Notice the names of the variables.
 
 ```{r apply_recipe}
 house_recipe %>% 
@@ -278,16 +285,20 @@ house_lm_wf <-
   add_recipe(house_recipe) %>% 
   # Add the modeling
   add_model(house_linear_mod)
-
-house_lm_wf
 ```
 
 <div class="notes">
 </div>
 
+## Workflow output
+
+```{r workflow_output}
+house_lm_wf
+```
+
 ## Modeling
 
-We first use the `fit()` function to fit the model, telling it which data set we want to fit the model to. Then we use some other functions to display the results nicely.
+Use the `fit()` function to fit the model to training data. Then display the results nicely.
 
 ```{r fit_lm}
 house_lm_fit <- 
@@ -306,11 +317,14 @@ house_lm_fit %>%
 Now we are finally ready to fit the model! After all that work, this part seems easy. We first use the `fit()` function to fit the model, telling it which data set we want to fit the model to. Then we use some other functions to display the results nicely.
 </div>
 
-## Model evaluation
+## Evaluating model (overview)
 
-To evaluate the model, we will use cross-validation (CV), specifically 5-fold CV. First, let's take a moment to review (or learn!) what 5-fold CV means.
+To evaluate the model, we will use cross-validation (CV), specifically 5-fold CV. 
+
+<div class="centered">
 
 ![Image credit: https://bradleyboehmke.github.io/HOML/process.html#resampling](../images/cv_HOML.png){width=800}
+</div>
 
 <div class="notes">
 In $k$-fold cross-validation, we start by dividing the data randomly into $k$ approximately equal groups or *folds*. The schematic here shows 5-fold cross-validation. 
@@ -324,7 +338,7 @@ So, again looking at the first row in the schematic, the model is fit to folds 2
 After this is done for all 5 folds, we take the average RMSE, to obtain the overall performance. This overall error is sometimes called the CV error. Averaging the performance over $k$ folds gives a better estimate of the true error than just using one hold-out set. It also allows us to estimate its variability.
 </div>
 
-## Evaluate model (code)
+## Evaluating model (code)
 
 ```{r fit_model_cv}
 house_lm_fit_cv <-
@@ -338,15 +352,257 @@ house_lm_fit_cv %>%
   select(id, .metrics) %>% 
   unnest(.metrics) %>% 
   filter(.metric == "rmse")
+```
 
+
+## Evaluating model (code)
+
+```{r eval_model}
 # Evaluation metrics averaged over all folds:
 collect_metrics(house_lm_fit_cv)
+
+# Just to show you where the averages come from:
+house_lm_fit_cv %>% 
+  select(id, .metrics) %>% 
+  unnest(.metrics) %>% 
+  group_by(.metric, .estimator) %>% 
+  summarize(mean = mean(.estimate),
+            n = n(),
+            std_err = sd(.estimate)/sqrt(n))
 ```
+
 <div class="notes">
 The `collect_metrics()` function averages the metrics over all the evaluation folds. 
 </div>
 
-## 
+
+## Predicting and evaluating testing data
+
+```{r fit_test}
+house_lm_test <- 
+  # The modeling work flow
+  house_lm_wf %>% 
+  # Use training data to fit the model and apply it to testing data
+  last_fit(house_split)
+# performance metrics from testing data
+collect_metrics(house_lm_test)
+# sample of predictions from testing data
+collect_predictions(house_lm_test) %>% 
+  slice(1:5)
+```
+<div class="notes">
+In this simple scenario, we may be interested in seeing how the model performs on the testing data that was left out. The code will fit the model to the training data and apply it to the testing data.
+
+After the model is fit and applied, we collect the performance metrics and display them and show the predictions from the testing data.
+</div>
+
+## How will the model be used?
+
+```{r price_pred_plot, fig.width=6, fig.height=4}
+collect_predictions(house_lm_test) %>% 
+  ggplot(aes(x = 10^price, y = 10^.pred)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  geom_abline(slope = 1, intercept = 0, color = "darkred") +
+  labs(x = "Actual price", y = "Predicted price")
+```
+
+<div class="notes">
+When we use create models, it is important to think about how the model will be used and specifically how the model could do harm. One thing to notice in the graphs above is that the price of lower priced homes are, on average, overestimated whereas the price of higher priced homes are, on average, underestimated. 
+
+What if this model was used to determine the price of homes for property tax purposes? Then lower priced homes would be overtaxed while higher priced homes would be undertaxed. 
+</div>
+
+## LASSO model - set up model
+
+For some information about the model: https://en.wikipedia.org/wiki/Lasso_(statistics)
+
+The `tune()` function inside of `set_args()` tells it that we will tune the `penalty` parameter later.
+
+```{r lasso_mod}
+house_lasso_mod <- 
+  # Define a lasso model 
+  # I believe default is mixture = 1 so probably don't need 
+  linear_reg(mixture = 1) %>% 
+  # Set the engine to "glmnet" 
+  set_engine("glmnet") %>% 
+  # The parameters we will tune.
+  set_args(penalty = tune()) %>% 
+  # Use "regression"
+  set_mode("regression")
+```
+
+<div class="notes">
+Now we are going to try using [Least Absolute Shrinkage and Selection Operator (LASSO)](https://en.wikipedia.org/wiki/Lasso_(statistics)) regression. This method shrinks some coefficients to 0 based on a penalty term. We will use cross-validation to help us find the best penalty term. 
+
+We will set up the model similar to how we set up the linear model, but add a `set_args()` function. We are telling it that we are going to tune the penalty parameter later.
+</div>
+
+## Create the workflow
+
+We use the same recipe as before but use new model.
+
+```{r lasso_workflow}
+house_lasso_wf <- 
+  # Set up the workflow
+  workflow() %>% 
+  # Add the recipe
+  add_recipe(house_recipe) %>% 
+  # Add the modeling
+  add_model(house_lasso_mod)
+```
+
+<div class="notes">
+</div>
+
+## Workflow output
+
+```{r}
+house_lasso_wf
+```
+
+
+## Tuning the penalty parameter
+
+We use the `grid_regular()` function from the `dials` library to choose some values of the `penalty` parameter for us. Alternatively, we could give it a vector of values we want to try.
+
+```{r tune_grid}
+penalty_grid <- grid_regular(penalty(),
+                             levels = 20)
+penalty_grid
+```
+
+<div class="notes">
+</div>
+
+## Tuning the penalty parameter
+
+Use the `tune_grid()` function to fit the model using cross-validation for all `penalty_grid` values and evaluate on all the folds.
+
+```{r tune}
+house_lasso_tune <- 
+  house_lasso_wf %>% 
+  tune_grid(
+    resamples = house_cv,
+    grid = penalty_grid
+    )
+
+house_lasso_tune
+```
+
+<div class="notes">
+</div>
+
+## Tuning the penalty parameter
+
+Then look at the cross-validated results. This shows rmse for fold 1 for each `penalty` value from `penalty_grid`.
+
+```{r tune_fold1}
+# The rmse for each penalty value for fold 1:
+house_lasso_tune %>% 
+  select(id, .metrics) %>% 
+  unnest(.metrics) %>% 
+  filter(.metric == "rmse", id == "Fold1")
+```
+
+<div class="notes">
+Model is fit to data from folds 2-5, then applied to fold 1 and RMSE is computed.
+</div>
+
+## Tuning the penalty parameter
+
+```{r tune_results}
+# rmse averaged over all folds for 5:
+house_lasso_tune %>% 
+  collect_metrics() %>% 
+  filter(.metric == "rmse") %>% 
+  slice(10:14)
+# Best tuning parameter by smallest rmse
+best_param <- house_lasso_tune %>% 
+  select_best(metric = "rmse")
+best_param
+```
+
+<div class="notes">
+`collect_metrics()` averages RMSE over all folds.
+
+We choose the best penalty parameter using `select_best()`, which chooses the parameter with the smallest cross-validated rmse. There are other ways you can select models, like `select_by_one_std_error()` which "selects the most simple model that is within one standard error of the numerically optimal results".
+</div>
+
+## Tuning the penalty parameter
+
+```{r rmse_viz, fig.width=4, fig.height=2.5}
+# Visualize rmse vs. penalty
+house_lasso_tune %>% 
+  collect_metrics() %>% 
+  filter(.metric == "rmse") %>% 
+  ggplot(aes(x = penalty, y = mean)) +
+  geom_point() +
+  geom_line() +
+  scale_x_log10() +
+  labs(x = "penalty", y = "rmse")
+```
+
+
+<div class="notes">
+Hard to see, but smallest rmse is 0.1354254, which occurs at a penalty of 2.069138 x 10^-04
+</div>
+
+## Finalize worflow for best tuned parameter
+
+```{r tune_wf}
+house_lasso_final_wf <- house_lasso_wf %>% 
+  finalize_workflow(best_param)
+house_lasso_final_wf
+```
+
+<div class="notes">
+Adjust the workflow to include the best tuning parameter.
+</div>
+
+## Evaluate on testing data
+
+Lastly, we apply the model to the test data and examine some final metrics. We also show the metrics from the regular linear model. 
+
+```{r lasso_test}
+# Fit model with best tuning parameter(s) to training data and apply to test data
+house_lasso_test <- house_lasso_final_wf %>% 
+  last_fit(house_split)
+
+# Metrics for model applied to test data
+house_lasso_test %>% 
+  collect_metrics()
+
+# Compare to regular linear regression results
+collect_metrics(house_lm_test)
+```
+
+<div class="notes">
+It looks like performance for the LASSO model is ever so slightly better, but just barely.
+</div>
+
+## Thank you & Resources
+
+<div class="columns-2">
+
+![](../images/photos.png){width=500}
+
+* [Rebecca Barter's blog](http://www.rebeccabarter.com/blog/2020-03-25_machine_learning/)
+
+* [tidymodels website](https://www.tidymodels.org/start/) (Alison Hill, Max Kuhn, Desirée De Leon, Julia Silge)
+
+* [Julia Silge's tidymodels example](https://juliasilge.com/blog/lasso-the-office/)
+
+</div>
+
+<div class="notes">
+</div>
+
+## THANK YOU!
+
+May your `tidymodels` endeavors be fruit ... er ... vegetable-ful?
+
+![]()
 
 <div class="notes">
 </div>
@@ -356,25 +612,6 @@ The `collect_metrics()` function averages the metrics over all the evaluation fo
 <div class="notes">
 </div>
 
-## 
-
-<div class="notes">
-</div>
-
-## 
-
-<div class="notes">
-</div>
-
-## 
-
-<div class="notes">
-</div>
-
-## 
-
-<div class="notes">
-</div>
 
 
 
