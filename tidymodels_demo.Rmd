@@ -266,7 +266,7 @@ collect_predictions(house_lm_test) %>%
   labs(x = "Actual log(price)", y = "Predicted log(price)")
 ```
 
-```{r}
+```{r price_pred_plot}
 collect_predictions(house_lm_test) %>% 
   ggplot(aes(x = 10^price, y = 10^.pred)) +
   geom_point() +
@@ -285,6 +285,8 @@ What if this model was used to determine the price of homes for property tax pur
 
 Now we are going to try using [Least Absolute Shrinkage and Selection Operator (LASSO)](https://en.wikipedia.org/wiki/Lasso_(statistics)) regression. This method shrinks some coefficients to 0 based on a penalty term. We will use cross-validation to help us find the best penalty term. 
 
+## Setting up the model
+
 We will set up the model similar to how we set up the linear model, but add a `set_args()` function. We are telling it that we are going to tune the penalty parameter later.
 
 ```{r lasso_mod}
@@ -300,6 +302,8 @@ house_lasso_mod <-
   set_mode("regression")
 ```
 
+## Updating workflow
+
 And then we create a LASSO workflow.
 
 ```{r lasso_workflow}
@@ -313,6 +317,8 @@ house_lasso_wf <-
 
 house_lasso_wf
 ```
+
+## Tuning the penalty parameter
 
 We use the `grid_regular()` function from the `dials` library to choose some values of the `penalty` parameter for us. Alternatively, we could give it a vector of values we want to try.
 
@@ -358,23 +364,27 @@ house_lasso_tune %>%
   geom_line() +
   scale_x_log10() +
   labs(x = "penalty", y = "rmse")
+
+# Best tuning parameter by smallest rmse
+best_param <- house_lasso_tune %>% 
+  select_best(metric = "rmse")
+best_param
 ```
+
+## Update worflow for best tuned parameter
 
 Adjust the workflow to include the best tuning parameter (smallest rmse, in this case) in the model. There are other ways you can select models, like `select_by_one_std_error()` which "selects the most simple model that is within one standard error of the numerically optimal results".
 
 ```{r tune_wf}
-# Best tuning parameter
-best_param <- house_lasso_tune %>% 
-  select_best(metric = "rmse")
-best_param
-
 # Finalize workflow
 house_lasso_final_wf <- house_lasso_wf %>% 
   finalize_workflow(best_param)
 house_lasso_final_wf
 ```
 
-Now we could fit this to the training data, look at the model
+## Fit best tune to training data
+
+Now we could fit this to the training data and look at the resulting model.
 
 ```{r lasso_train}
 house_lasso_final_mod <- house_lasso_final_wf %>% 
@@ -391,6 +401,8 @@ house_lasso_final_mod %>%
   pull_workflow_fit() %>% 
   vip()
 ```
+
+## Evaluate on testing data
 
 Lastly, we apply the model to the test data and examine some final metrics. We also show the metrics from the regular linear model. It looks like performance for the LASSO model is ever so slightly better, but just barely.
 
