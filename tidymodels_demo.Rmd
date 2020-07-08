@@ -429,7 +429,7 @@ Thanks to many other folks for sharing materials about `tidymodels`, including
 
 ![](images/photos.png){width=500}
 
-These are some resources I used to help me create this activity:
+These are some resources I used to help create this activity:
 
 * [Rebecca Barter's blog](http://www.rebeccabarter.com/blog/2020-03-25_machine_learning/)
 
