@@ -30,12 +30,14 @@ Also useful if you:
 * Have used some modeling techniques, like `lm()`.  
 * Are excited about learning machine learning.  
 
+Follow along at [https://github.com/llendway/2020_north_tidymodels](https://github.com/llendway/2020_north_tidymodels), using the tidymodels_demo.Rmd file.
+
 </div>
 
 <div class="notes">
-Welcome. My name is Lisa Lendway. I have a PhD in Statistics and teach Statistics and Data Science to undergraduates at Macalester College in St. Paul, MN. 
+Thank you and welcome. 
 
-I am excited to give this talk today. I initially signed up to do it to force myself to learn `tidymodels`. 
+I am excited to give this talk today. I initially signed up to do it to force myself to learn `tidymodels`. If you have done extensive modeling and love using the `tidyverse`, then this should be exciting. I recommend following along in the tidymodels_demo.Rmd file. I will put the link to the GitHub repo in the chat now: https://github.com/llendway/2020_north_tidymodels. You can download the Rmd file or clone the repo.
 </div>
 
 ## What will we cover?
@@ -46,20 +48,30 @@ I am excited to give this talk today. I initially signed up to do it to force my
 </div>
 
 <div class="notes">
-I will give a high-level overview of how and when you might use some of the `tidymodels` functions. We will call it a birds' eye view. 
+In this talk, I will give a high-level overview of some `tidymodels` functions, like a birds' eye view. 
 </div>
 
 ## What will we cover?
 
 <div class="centered">
 
-![](../images/tidymodels_process.png){width=600}
+![Grape tomatoes from my garden](../images/tomatoes.JPG){width=400}
+
 </div>
 
-Follow along in the rmd file: INCLUDE LINK!!!
+<div class="notes">
+We will get to see some detail for a couple different times of models, even though I can't cover all `tidymodels` has to offer. I hope it will excite you enough to continue learning about it on your own. 
+</div>
+
+## What will we cover?
+
+<div class="centered">
+
+![Machine Learning Process](../images/tidymodels_process.png){width=600}
+</div>
 
 <div class="notes">
-We will walk through all of these steps, using different `tidymodels` functions along the way.
+We will walk through all of these machine learning steps, using different `tidymodels` functions along the way. 
 </div>
 
 ## Libraries 
@@ -85,7 +97,7 @@ tidymodels_packages()
 
 ## The data
 
-According to the `house_prices` documentation, "This dataset contains house sale prices for King County, which includes Seattle. It includes homes sold between May 2014 and May 2015.
+According to the `house_prices` documentation, "This dataset contains house sale prices for King County, which includes Seattle. It includes homes sold between May 2014 and May 2015."
 
 ```{r data}
 data("house_prices")
@@ -97,6 +109,7 @@ house_prices %>%
 We will model the home price using the other variables in the model.
 
 <div class="notes">
+We will use the `house_prices` dataset from the `moderndive` library. The data were orginally from Kaggle. This dataset contains house sale prices for King County, which includes Seattle. It includes homes sold between May 2014 and May 2015. 
 </div>
 
 ## Exploration
@@ -111,8 +124,11 @@ house_prices %>%
 ```
 
 <div class="notes">
-Things I noticed and pre-processing thoughts:
-* Right-skewness in `price` and all variables regarding square footage --> log transform if using linear regression.
+We start by exploring the data, first looking at the quantitative variables. 
+
+Things I noticed and how I might correct them:
+
+* Right-skewness in `price` and all variables regarding square footage --> log transform since we will be using linear regression.  
 * Many 0's in `sqft_basement`, `view`, and `yr_renovated` --> create indicator variables of having that feature vs. not, ie. a variable called `basement` where a 0 indicates no basement (`sqft_basement` = 0) and a ` indicates a basement (`sqft_basement` > 0).  
 * Age of home may be a better, more interpretable variable than year built --> `age_at_sale = year(date) - yr_built`.
 </div>
@@ -129,7 +145,8 @@ house_prices %>%
 ```
 
 <div class="notes">
-Things I noticed and pre-processing thoughts:
+Next, we examine the categorical variables.
+
 * `condition` and `grade` both have levels with low counts --> make fewer categories.  
 * `zipcode` has many unique levels --> don't use that variable.
 
@@ -144,6 +161,10 @@ The only other variables are `id` (not used in modeling), `date`, and `waterfron
 </div>
 
 <div class="notes">
+This shows a visualization of the modeling process.  
+
+* Start by dividing data into training and testing. We use the training data to fit different types of models and to tune parameters of those models, if needed. The testing dataset is saved for the very end to compare a small subset of models. 
+* The training set is further sampled into smaller datasets. I'll discuss more about that later.
 </div>
 
 ## Data splitting
@@ -162,7 +183,7 @@ house_testing <- testing(house_split)
 ```
 
 <div class="notes">
-First, we split the data into  training and testing datasets.  We use the training data to fit different types of models and to tune parameters of those models, if needed. The testing dataset is saved for the very end to compare a small subset of models. The `initial_split()` function from the `rsample` library (part of `tidymodels`) is used to create this split. We just do random splitting with this dataset, but there are other arguments that allow you to do stratified sampling. Then we use `training()` and `testing()` to extract the two datasets, `house_training` and `house_testing`. 
+The `initial_split()` function from the `rsample` library (part of `tidymodels`) is used to create this split. We just do random sampling with this dataset, but there are other arguments that allow you to do things like stratified sampling. Then we use `training()` and `testing()` to extract the two datasets, `house_training` and `house_testing`. 
 </div>
 
 ## Data splitting
@@ -176,7 +197,7 @@ house_cv
 ```
 
 <div class="notes">
-We set up the five folds of the training data using the `vfold_cv()` function. We will explain this in more detail later.
+We set up the five folds of the training data using the `vfold_cv()` function. I will explain this in more detail later.
 </div>
 
 ## Data preprocessing and recipe
@@ -227,15 +248,15 @@ A variety of `step_xxx()` functions can be used to do data pre-processing/transf
 <div class="notes">
 * We use the `recipe()` function to define the response/outcome variable and the predictor variables. 
 
-* I used a few, with brief descriptions in the code. I also used some selector functions, like `all_predictors()` and `all_nominal()` to help me select the right variables.
+* I used a few `step_xxx` functions, with brief descriptions in the code. For example `step_log()` takes the log (in this case, base 10) of the variables and `step_dummy()` creates indicator or dummy variables for categorical variables.
 
-* We also use `update_roles()` to change the roles of some variables. For us, these are variables we may want to include for evaluation purposes but will not be used in building the model. I chose the role of `evaluative` but you could name that role anything you want, eg. `id`, `extra`, `junk` (maybe a bad idea?).
+* We also use `update_roles()` to change the roles of some variables. 
 
 </div>
 
 ## Apply `recipe` and `step`s
 
-Apply recipe and steps to training dataset, just to see what happens. Notice the names of the variables.
+Apply recipe and steps to training dataset, just to see the output. Notice the names of the variables.
 
 ```{r apply_recipe}
 house_recipe %>% 
@@ -244,6 +265,7 @@ house_recipe %>%
 ```
 
 <div class="notes">
+Even though it's not necessary, I like applying these to the training data, just to check that all went as planned. Notice the variable `sqft_living` is now actually log base 10 of `sqft_living` and if we scroll to the right we can see examples of the indicator/dummy variables that were created.
 </div>
 
 ## Defining the model
@@ -270,6 +292,13 @@ house_linear_mod <-
 <div class="notes">
 Now that we have split and pre-processed the data, we are ready to model! First, we will model `price` (which is actually now *log(price)*) using simple linear regression.
 
+In order to define our model, we need to do these steps:
+
+* Define the model type, which is the general type of model you want to fit. In this case `linear_reg()`.  
+* Set the engine, which defines the package/function that will be used to fit the model.  In this case "lm".  
+* Set the mode, which is either "regression" for continuous response variables or "classification" for binary/categorical response variables. (Note that for linear regression, it can only be "regression", so we don't NEED this step in this case.)  
+* (OPTIONAL) Set arguments to tune. We'll see an example of this later.
+
 This is just setting up the process. We haven't fit the model to data yet, and there's still one more step before we do - creating a workflow!
 </div>
 
@@ -288,6 +317,7 @@ house_lm_wf <-
 ```
 
 <div class="notes">
+Start the workflow, add the recipe and the model.
 </div>
 
 ## Workflow output
@@ -295,6 +325,10 @@ house_lm_wf <-
 ```{r workflow_output}
 house_lm_wf
 ```
+
+<div class="notes">
+The `workflow` output shows us the preprocessing steps and the modeling step.
+</div>
 
 ## Modeling
 
@@ -327,11 +361,13 @@ To evaluate the model, we will use cross-validation (CV), specifically 5-fold CV
 </div>
 
 <div class="notes">
-In $k$-fold cross-validation, we start by dividing the data randomly into $k$ approximately equal groups or *folds*. The schematic here shows 5-fold cross-validation. 
+We want to know how well the model will perform on data it hasn't seen before. We use $k$-fold cross-validation to do this.
 
-The model is fit on $k-1$ of the folds and the remaining fold is used to evaluate the model. Let's look at the first row in the schematic. Here the model would be fit on the data that are in folds 2, 3, 4, and 5. The model would be evaluated on the data in fold 1. 
+In $k$-fold cross-validation, we divide the data randomly into $k$ approximately equal groups or *folds*. The schematic here shows 5-fold cross-validation. 
 
-RMSE is a common performance metric for models with a quantitative response. It is computed by taking the difference between the predicted and actual response for each observation, squaring it, and taking the square root of the average over all predicted observations. 
+The model is fit on $k-1$ of the folds and the remaining fold is used to evaluate the model. Let's look at the first row in the schematic. Here the model is fit on the data that are in folds 2, 3, 4, and 5. The model is evaluated on the data in fold 1. 
+
+RMSE is a common performance metric for models with a quantitative response. It is computed by taking the difference between the predicted and actual response for each observation, squaring it, and taking the square root of the average over all observations. 
 
 So, again looking at the first row in the schematic, the model is fit to folds 2, 3, 4, and 5 and we would use that model to compute the RMSE for fold 1. In the second row, the model is fit to the data in folds 1, 3, 4, and 5 and that model is used to compute the RMSE for the data in the 2nd fold. 
 
@@ -354,6 +390,9 @@ house_lm_fit_cv %>%
   filter(.metric == "rmse")
 ```
 
+<div class="notes">
+Thankfully this is easy to implement with the `fit_resamples()` function. The column called `.estimate` in the output shows the rmse for each fold. They are similar but not all the same. 
+</div>
 
 ## Evaluating model (code)
 
@@ -372,9 +411,8 @@ house_lm_fit_cv %>%
 ```
 
 <div class="notes">
-The `collect_metrics()` function averages the metrics over all the evaluation folds. 
+The `collect_metrics()` function averages the metrics over all the evaluation folds. I also provided the code to show you how you could do that "by hand".
 </div>
-
 
 ## Predicting and evaluating testing data
 
@@ -391,24 +429,31 @@ collect_predictions(house_lm_test) %>%
   slice(1:5)
 ```
 <div class="notes">
-In this simple scenario, we may be interested in seeing how the model performs on the testing data that was left out. The code will fit the model to the training data and apply it to the testing data.
+In this simple scenario, we may be interested in seeing how the model performs on the testing data that was left out. The the `last_fit()` function will fit the model to the training data and apply it to the testing data. Because it is using the workflow, it is applying the same transformation steps to the testing data as were applied to the training data.
 
 After the model is fit and applied, we collect the performance metrics and display them and show the predictions from the testing data.
 </div>
 
 ## How will the model be used?
 
-```{r price_pred_plot, fig.width=6, fig.height=4}
+```{r price_pred_plot, echo=FALSE, fig.width=7, fig.height=5, fig.align='center'}
 collect_predictions(house_lm_test) %>% 
   ggplot(aes(x = 10^price, y = 10^.pred)) +
   geom_point() +
   geom_smooth(se = FALSE) +
   geom_abline(slope = 1, intercept = 0, color = "darkred") +
-  labs(x = "Actual price", y = "Predicted price")
+  labs(x = "Actual price", y = "Predicted price") +
+  scale_y_continuous(labels = scales::dollar_format(scale = .001, suffix = "K")) +
+  scale_x_continuous(labels = scales::dollar_format(scale = .001, suffix = "K")) +
+  coord_cartesian(xlim = c(0,1000000), ylim = c(0,1000000))
+
 ```
 
 <div class="notes">
-When we use create models, it is important to think about how the model will be used and specifically how the model could do harm. One thing to notice in the graphs above is that the price of lower priced homes are, on average, overestimated whereas the price of higher priced homes are, on average, underestimated. 
+
+This shows predicted vs. actual prices for a zoomed-in subset of the data. 
+
+When we use create models, it is important to think about how the model will be used and specifically how the model could do harm. One thing to notice in the graphs above is that the lower priced homes are, on average, overestimated whereas higher priced homes are, on average, underestimated. 
 
 What if this model was used to determine the price of homes for property tax purposes? Then lower priced homes would be overtaxed while higher priced homes would be undertaxed. 
 </div>
@@ -600,17 +645,25 @@ It looks like performance for the LASSO model is ever so slightly better, but ju
 
 ## THANK YOU!
 
+You have *bean* a wonderful audience!
+
+<div class="centered">
+
+![](../images/garden.JPG){width=600}
+
+</div>
+
+## THANK YOU!
+
 May your `tidymodels` endeavors be fruit ... er ... vegetable-ful?
 
-![]()
+<div class="centered">
 
-<div class="notes">
+![](../images/garden_above.jpg){width=600}
+
 </div>
 
-## 
 
-<div class="notes">
-</div>
 
 
 
