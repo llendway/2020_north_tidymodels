@@ -55,7 +55,7 @@ In this talk, I will give a high-level overview of some `tidymodels` functions, 
 
 <div class="centered">
 
-![Grape tomatoes from my garden](../images/tomatoes.JPG){width=400}
+![Grape tomatoes from my garden](../images/tomatoes.JPG){width=350}
 
 </div>
 
@@ -506,6 +506,9 @@ house_lasso_wf <-
 house_lasso_wf
 ```
 
+<div class="notes">
+We can see that we are using a different model now.
+</div>
 
 ## Tuning the penalty parameter
 
@@ -551,7 +554,7 @@ house_lasso_tune %>%
 ```
 
 <div class="notes">
-Model is fit to data from folds 2-5, then applied to fold 1 and RMSE is computed.
+Then look at the cross-validated results. This shows rmse for fold 1 for each `penalty` value from `penalty_grid`. The model is fit to data from folds 2-5, then applied to fold 1 and RMSE is computed.
 </div>
 
 ## Tuning the penalty parameter
@@ -607,7 +610,7 @@ Adjust the workflow to include the best tuning parameter.
 
 ## Evaluate on testing data
 
-Lastly, we apply the model to the test data and examine some final metrics. We also show the metrics from the regular linear model. 
+Like before, we apply the model to the test data and examine some final metrics. We also show the metrics from the regular linear model. 
 
 ```{r lasso_test}
 # Fit model with best tuning parameter(s) to training data and apply to test data
@@ -623,7 +626,7 @@ collect_metrics(house_lm_test)
 ```
 
 <div class="notes">
-It looks like performance for the LASSO model is ever so slightly better, but just barely.
+Like before, we apply the model to the test data and examine some final metrics. We also show the metrics from the regular linear model. It looks like performance for the LASSO model is ever so slightly better, but just barely.
 </div>
 
 ## Thank you & Resources
@@ -641,6 +644,7 @@ It looks like performance for the LASSO model is ever so slightly better, but ju
 </div>
 
 <div class="notes">
+Thank you to all of these folks for the wonderful resources and for developing these packages!
 </div>
 
 ## THANK YOU!
@@ -649,7 +653,7 @@ You have *bean* a wonderful audience!
 
 <div class="centered">
 
-![](../images/garden.JPG){width=600}
+![Close-up of my green beans](../images/bean.JPG){width=300}
 
 </div>
 
@@ -659,12 +663,16 @@ May your `tidymodels` endeavors be fruit ... er ... vegetable-ful?
 
 <div class="centered">
 
-![](../images/garden_above.jpg){width=600}
+![My garden as of 07/08/2020](../images/garden_above.jpg){width=600}
 
 </div>
 
 
+## Questions?
 
+GitHub repo: [https://github.com/llendway/2020_north_tidymodels](https://github.com/llendway/2020_north_tidymodels)
+
+Veggie photos: [https://www.pinterest.com/lisalendway/jungle-garden-20/](https://www.pinterest.com/lisalendway/jungle-garden-20/)
 
 
 
