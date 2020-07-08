@@ -674,5 +674,7 @@ GitHub repo: [https://github.com/llendway/2020_north_tidymodels](https://github.
 
 Veggie photos: [https://www.pinterest.com/lisalendway/jungle-garden-20/](https://www.pinterest.com/lisalendway/jungle-garden-20/)
 
+Veggie data and repo: [https://github.com/llendway/jungle_garden_2020](https://github.com/llendway/jungle_garden_2020)
+
 
 
