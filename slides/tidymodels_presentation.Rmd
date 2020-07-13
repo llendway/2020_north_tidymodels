@@ -352,7 +352,7 @@ In order to define our model, we need to do these steps:
 * Set the mode, which is either "regression" for continuous response variables or "classification" for binary/categorical response variables. (Note that for linear regression, it can only be "regression", so we don't NEED this step in this case.)  
 * (OPTIONAL) Set arguments to tune. We'll see an example of this later.
 
-Find all available functions from parsnip [here](https://www.tidymodels.org/find/parsnip/). [Here](https://parsnip.tidymodels.org/reference/linear_reg.html) is the detail for linear regression.
+Find all available functions from `parsnip` [here](https://www.tidymodels.org/find/parsnip/). [Here](https://parsnip.tidymodels.org/reference/linear_reg.html) is the detail for linear regression.
 
 ```{r linear_mod}
 house_linear_mod <- 
@@ -369,7 +369,7 @@ Now that we have split the data and defined outcome/predictor variables and the 
 
 In order to define our model, we need to do these steps:
 
-* Define the model type, which is the general type of model you want to fit. In this case `linear_reg()`.  
+* Define the model type, which is the general type of model you want to fit. In this case `linear_reg()`. I'll put the link to `parsnip` functions in the chat: [https://www.tidymodels.org/find/parsnip/](https://www.tidymodels.org/find/parsnip/).
 * Set the engine with `set_engine()`, which defines the package/function that will be used to fit the model.  In this case "lm".  
 * Set the mode with `set_mode()`, which is either "regression" for continuous response variables or "classification" for binary/categorical response variables. (Note that for linear regression, it can only be "regression", so we don't NEED this step in this case, but I have it here so you don't forget it for other models later.)  
 * (OPTIONAL) Set arguments to tune. We'll see an example of this later.
